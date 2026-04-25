@@ -1,0 +1,12 @@
+{
+  "name": "atelier-bizarre-restaurant",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:desktop": "cd desktop && npm run dev",
+    "build": "cd desktop && npm run build",
+    "package:linux": "cd desktop && npm run package:linux"
+  }
+}

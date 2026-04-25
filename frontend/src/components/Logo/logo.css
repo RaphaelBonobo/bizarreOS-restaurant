@@ -1,0 +1,70 @@
+/* ── Bizarre OS Logo ─────────────────────────────────────────── */
+
+.bz-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Pastille — toujours masquée dans un cercle parfait */
+.bz-disc {
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bz-disc img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Rotation : activée uniquement sur les surfaces héros (≥ 48 px) */
+.bz-disc--animated img {
+  animation: bz-spin var(--bz-disc-speed, 60s) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bz-disc--animated img {
+    animation: none;
+  }
+}
+
+/* Hairline interne sur fond sombre */
+.bz-disc--dark {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+/* Wordmark */
+.bz-wordmark {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.bz-name {
+  font-family: var(--bz-font);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bz-pigment, #8B9862);
+}
+
+.bz-tagline {
+  font-family: var(--bz-font);
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--bz-ink, #2D3142);
+  opacity: 0.55;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

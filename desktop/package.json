@@ -1,0 +1,45 @@
+{
+  "name": "atelier-bizarre-restaurant-desktop",
+  "version": "1.0.0",
+  "description": "Bizarre OS — Restaurant Edition",
+  "main": "src/main.js",
+  "author": {"name": "Atelier Bizarre", "email": "contact@atelierbizarre.fr"},
+  "homepage": "https://atelierbizarre.fr",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "package:linux": "electron-builder build --linux",
+    "package:windows": "electron-builder build --win || true"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "electron": "^41.2.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.atelierbizarre.restaurant",
+    "productName": "Bizarre OS",
+    "executableName": "bizarre-restaurant",
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Office",
+      "icon": "assets/icon.png"
+    },
+    "win": {
+      "target": [{"target": "dir", "arch": ["x64"]}]
+    },
+    "files": ["src/**/*", "assets/**/*", "!**/*.map"],
+    "extraResources": [
+      {"from": "../frontend/dist", "to": "frontend", "filter": ["**/*"]},
+      {"from": "../backend/dist/index.cjs", "to": "backend/dist/index.cjs"},
+      {"from": "../backend/node_modules/.prisma", "to": "backend/node_modules/.prisma", "filter": ["**/*"]},
+      {"from": "../backend/node_modules/@prisma/client", "to": "backend/node_modules/@prisma/client", "filter": ["**/*"]},
+      {"from": "../backend/template.db", "to": "template.db"}
+    ],
+    "directories": {"output": "dist", "buildResources": "assets"}
+  }
+}

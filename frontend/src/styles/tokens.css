@@ -1,0 +1,34 @@
+/* ── Bizarre OS Design Tokens ────────────────────────────────── */
+:root {
+  /* Couleurs */
+  --bz-ink:    #2D3142;
+  --bz-paper:  #FAF7F1;
+  --bz-accent: #EF8354;
+
+  /* Produit courant : Menus (pistache) */
+  --bz-pigment: #8B9862;
+
+  /* Typographie */
+  --bz-font: 'Kumbh Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Pastille */
+  --bz-disc-size: 40px;
+  --bz-disc-speed: 60s;
+}
+
+/* ── Base ─────────────────────────────────────────────────────── */
+body {
+  font-family: var(--bz-font);
+}
+
+/* ── Rotation pastille (surfaces héros ≥ 48 px) ─────────────── */
+@keyframes bz-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bz-disc--animated {
+    animation: none !important;
+  }
+}
