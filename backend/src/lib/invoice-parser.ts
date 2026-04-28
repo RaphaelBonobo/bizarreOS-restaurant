@@ -1,7 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
 export interface ParsedIngredient {
   nom: string;
   stockReception: number | null;
@@ -49,7 +47,8 @@ Règles :
 - Si tu ne peux pas extraire une valeur, mets null
 - Réponds UNIQUEMENT avec le JSON, sans markdown ni texte autour`;
 
-export async function parseInvoicePDF(pdfBuffer: Buffer): Promise<ParsedInvoice> {
+export async function parseInvoicePDF(pdfBuffer: Buffer, apiKey: string): Promise<ParsedInvoice> {
+  const client = new Anthropic({ apiKey });
   const base64 = pdfBuffer.toString('base64');
 
   const response = await client.messages.create({
@@ -61,26 +60,17 @@ export async function parseInvoicePDF(pdfBuffer: Buffer): Promise<ParsedInvoice>
         content: [
           {
             type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: base64,
-            },
+            source: { type: 'base64', media_type: 'application/pdf', data: base64 },
           } as any,
-          {
-            type: 'text',
-            text: PROMPT,
-          },
+          { type: 'text', text: PROMPT },
         ],
       },
     ],
   });
 
   const text = response.content.find((b) => b.type === 'text')?.text ?? '';
-
   try {
-    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(cleaned) as ParsedInvoice;
+    return JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()) as ParsedInvoice;
   } catch {
     throw new Error(`Réponse Claude non parseable : ${text.slice(0, 200)}`);
   }

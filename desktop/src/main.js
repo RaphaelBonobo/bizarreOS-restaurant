@@ -1,12 +1,14 @@
 const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
-const Store = require('electron-store');
+const fs = require('fs');
+const http = require('http');
+const { execFileSync } = require('child_process');
+const { spawn } = require('child_process');
 const express = require('express');
-
-const store = new Store();
 
 let mainWindow;
 let frontendServer;
+let backendProcess;
 
 const isDev = process.argv.includes('--dev');
 const BACKEND_PORT = 3000;
@@ -18,99 +20,134 @@ const resourcesPath = isDev
   : process.resourcesPath;
 
 const frontendDistPath = isDev ? null : path.join(resourcesPath, 'frontend');
-const frontendUrl = isDev ? `http://localhost:${FRONTEND_PORT}` : `http://localhost:${PROD_FRONTEND_PORT}`;
+const frontendUrl = isDev
+  ? `http://localhost:${FRONTEND_PORT}`
+  : `http://localhost:${PROD_FRONTEND_PORT}`;
 
-function getDatabaseUrl() {
-  const fs = require('fs');
-  const userDataPath = app.getPath('userData');
-  const dbPath = path.join(userDataPath, 'restaurant.db');
-
-  if (!fs.existsSync(dbPath)) {
-    // First launch: copy the pre-built template database
-    const templatePath = isDev
-      ? path.join(__dirname, '../../backend/template.db')
-      : path.join(resourcesPath, 'template.db');
+function getDbPath() {
+  const dbDir = path.join(app.getPath('userData'), 'database');
+  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+  const dbPath = path.join(dbDir, 'app.sqlite');
+  if (!fs.existsSync(dbPath) && !isDev) {
+    const templatePath = path.join(resourcesPath, 'template.db');
     if (fs.existsSync(templatePath)) {
       fs.copyFileSync(templatePath, dbPath);
+      console.log('Base de données initialisée depuis le template.');
     }
   }
+  return dbPath;
+}
 
-  return `file:${dbPath}`;
+function findNodeBinary() {
+  if (process.env.NVM_BIN) {
+    const p = path.join(process.env.NVM_BIN, 'node');
+    if (fs.existsSync(p)) return p;
+  }
+  const nvmDir = path.join(process.env.HOME || '', '.nvm', 'versions', 'node');
+  if (fs.existsSync(nvmDir)) {
+    try {
+      const versions = fs.readdirSync(nvmDir).sort().reverse();
+      for (const v of versions) {
+        const p = path.join(nvmDir, v, 'bin', 'node');
+        if (fs.existsSync(p)) return p;
+      }
+    } catch {}
+  }
+  for (const p of ['/usr/bin/node', '/usr/local/bin/node', '/opt/homebrew/bin/node', '/snap/bin/node']) {
+    if (fs.existsSync(p)) return p;
+  }
+  try { return execFileSync('sh', ['-c', 'which node'], { encoding: 'utf8' }).trim(); } catch {}
+  return 'node';
 }
 
 function startFrontendServer() {
   if (isDev) return Promise.resolve();
   return new Promise((resolve) => {
-    const srv = express();
-    srv.use(express.static(frontendDistPath));
-    // SPA fallback : toute route non trouvée renvoie index.html
-    srv.use((_req, res) => {
-      res.sendFile(path.join(frontendDistPath, 'index.html'), (err) => {
-        if (err) res.status(200).sendFile(path.join(frontendDistPath, 'index.html'));
-      });
+    const expressApp = express();
+    expressApp.use(express.static(frontendDistPath));
+    expressApp.use((_req, res) => {
+      res.sendFile(path.join(frontendDistPath, 'index.html'));
     });
-    frontendServer = srv.listen(PROD_FRONTEND_PORT, resolve);
+    frontendServer = expressApp.listen(PROD_FRONTEND_PORT, () => {
+      console.log(`Frontend server listening on port ${PROD_FRONTEND_PORT}`);
+      resolve();
+    });
+    frontendServer.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`Port ${PROD_FRONTEND_PORT} déjà utilisé.`);
+        resolve();
+      } else {
+        console.error('Erreur serveur frontend:', err);
+        resolve();
+      }
+    });
+  });
+}
+
+function waitForBackend(maxMs) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    function poll() {
+      const req = http.get(
+        { hostname: 'localhost', port: BACKEND_PORT, path: '/health', timeout: 500 },
+        (res) => {
+          res.resume();
+          if (res.statusCode < 500) { console.log('Backend prêt.'); resolve(); }
+          else retry();
+        }
+      );
+      req.on('error', retry);
+      req.on('timeout', () => { req.destroy(); retry(); });
+      function retry() {
+        if (Date.now() - start > maxMs) reject(new Error(`Backend non disponible après ${maxMs}ms`));
+        else setTimeout(poll, 300);
+      }
+    }
+    poll();
   });
 }
 
 function startBackend() {
   return new Promise((resolve, reject) => {
-    // Set env vars before loading the backend module
-    process.env.PORT = BACKEND_PORT.toString();
-    process.env.NODE_ENV = isDev ? 'development' : 'production';
-    process.env.DATABASE_URL = getDatabaseUrl();
-    process.env.ANTHROPIC_API_KEY = store.get('anthropicApiKey') || process.env.ANTHROPIC_API_KEY || '';
+    const env = {
+      ...process.env,
+      PORT: BACKEND_PORT.toString(),
+      NODE_ENV: isDev ? 'development' : 'production',
+      DB_PATH: getDbPath(),
+    };
 
     if (isDev) {
-      // In dev mode, spawn tsx as before
-      const { spawn } = require('child_process');
       const backendPath = path.join(resourcesPath, 'backend');
-      const proc = spawn('npm', ['run', 'dev'], {
+      backendProcess = spawn('npm', ['run', 'dev'], {
         cwd: backendPath,
-        env: { ...process.env },
+        env,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
-      proc.stdout.on('data', (data) => {
-        const text = data.toString().trim();
-        console.log(`Backend: ${text}`);
-        if (text.includes('Server running')) resolve();
-      });
-      proc.stderr.on('data', (d) => console.error(`Backend: ${d.toString().trim()}`));
-      proc.on('error', reject);
-      setTimeout(resolve, 6000);
+      backendProcess.stdout.on('data', (d) => console.log(`Backend: ${d.toString().trim()}`));
+      backendProcess.stderr.on('data', (d) => console.error(`Backend: ${d.toString().trim()}`));
+      backendProcess.on('error', reject);
+      waitForBackend(30000).then(resolve).catch(reject);
       return;
     }
 
-    // Production: load bundled backend in-process
+    // Production : charger le bundle en in-process dans Electron
+    // → better-sqlite3 compilé pour Electron fonctionne nativement
+    // Les vars d'env DOIVENT être injectées dans process.env avant le require
+    // car le bundle partage le même process et ne reçoit pas l'objet env local.
+    process.env.PORT = BACKEND_PORT.toString();
+    process.env.NODE_ENV = 'production';
+    process.env.DB_PATH = getDbPath();
+
+    const backendBundle = path.join(resourcesPath, 'backend', 'dist', 'index.cjs');
+    console.log('Backend bundle:', backendBundle, '| DB:', process.env.DB_PATH);
     try {
-      const backendBundle = path.join(resourcesPath, 'backend', 'dist', 'index.cjs');
-
-      // Patch @prisma/client resolution to find engines in extraResources
-      const prismaClientPath = path.join(resourcesPath, 'backend', 'node_modules', '@prisma', 'client');
-      const dotPrismaPath = path.join(resourcesPath, 'backend', 'node_modules', '.prisma');
-      process.env.PRISMA_QUERY_ENGINE_LIBRARY = findPrismaEngine(dotPrismaPath);
-
       require(backendBundle);
-
-      // Give the HTTP server a moment to bind
-      setTimeout(resolve, 500);
     } catch (err) {
-      reject(err);
+      console.error('Erreur chargement backend:', err);
+      return reject(err);
     }
+    waitForBackend(15000).then(resolve).catch(reject);
   });
-}
-
-function findPrismaEngine(dotPrismaPath) {
-  const fs = require('fs');
-  try {
-    const clientDir = path.join(dotPrismaPath, 'client');
-    if (!fs.existsSync(clientDir)) return '';
-    const files = fs.readdirSync(clientDir);
-    const engine = files.find((f) => f.startsWith('libquery_engine') && f.endsWith('.node'));
-    return engine ? path.join(clientDir, engine) : '';
-  } catch {
-    return '';
-  }
 }
 
 function createWindow() {
@@ -144,37 +181,30 @@ function createWindow() {
         { label: 'Couper', role: 'cut' },
         { label: 'Copier', role: 'copy' },
         { label: 'Coller', role: 'paste' },
+        { label: 'Tout sélectionner', role: 'selectAll' },
       ],
     },
     {
       label: 'Affichage',
       submenu: [
-        { label: 'Recharger', accelerator: 'CmdOrCtrl+R', click: () => mainWindow && mainWindow.loadURL(frontendUrl) },
+        { label: 'Recharger', accelerator: 'CmdOrCtrl+R', role: 'reload' },
+        { label: 'Forcer le rechargement', accelerator: 'CmdOrCtrl+Shift+R', role: 'forceReload' },
         { type: 'separator' },
         { label: 'Zoom +', role: 'zoomIn' },
         { label: 'Zoom -', role: 'zoomOut' },
         { label: 'Taille réelle', role: 'resetZoom' },
         { type: 'separator' },
         { label: 'Plein écran', role: 'togglefullscreen' },
+        { label: 'Outils de développement', accelerator: 'F12', role: 'toggleDevTools' },
       ],
     },
   ];
 
-  if (isDev) {
-    template.push({
-      label: 'Dev',
-      submenu: [{ label: 'Outils développeur', role: 'toggleDevTools' }],
-    });
-  }
-
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 
-  // Intercepte toute navigation "dure" : si l'URL cible est une route SPA
-  // (même origine que le frontend), on laisse React Router gérer côté client
-  // en rechargeant simplement depuis la racine.
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const target = new URL(url);
-    const base   = new URL(frontendUrl);
+    const base = new URL(frontendUrl);
     if (target.host === base.host && target.pathname !== '/') {
       event.preventDefault();
       mainWindow.loadURL(frontendUrl);
@@ -183,12 +213,12 @@ function createWindow() {
 
   mainWindow.loadURL(frontendUrl);
   mainWindow.once('ready-to-show', () => mainWindow.show());
-  if (isDev) mainWindow.webContents.openDevTools();
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-function stopFrontendServer() {
+function stopAll() {
   if (frontendServer) { frontendServer.close(); frontendServer = null; }
+  if (backendProcess) { backendProcess.kill(); backendProcess = null; }
 }
 
 app.whenReady().then(async () => {
@@ -198,11 +228,13 @@ app.whenReady().then(async () => {
     createWindow();
   } catch (error) {
     console.error('Erreur au démarrage:', error);
-    app.quit();
+    createWindow(); // affiche quand même la fenêtre
   }
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-app.on('before-quit', () => stopFrontendServer());
-app.on('will-quit', () => stopFrontendServer());
+app.on('before-quit', stopAll);
+app.on('will-quit', stopAll);
+
+process.on('uncaughtException', (error) => { console.error('Erreur non capturée:', error); });

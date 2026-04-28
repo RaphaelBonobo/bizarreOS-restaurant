@@ -1,32 +1,32 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../lib/prisma.js';
+import { db } from '../lib/db.js';
+import { tenants } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 const router = Router();
 
-router.get('/', async (req: Request, res: Response) => {
-  const tenantId = req.user!.tenantId;
+router.get('/', (req: Request, res: Response) => {
   try {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, name: true },
+    const tenant = db.query.tenants.findFirst({
+      columns: { id: true, name: true },
+      where: eq(tenants.id, req.user!.tenantId),
     });
     res.json(tenant ?? { name: '' });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Erreur lors de la récupération des paramètres' });
   }
 });
 
-router.patch('/', async (req: Request, res: Response) => {
-  const tenantId = req.user!.tenantId;
-  const { name } = req.body;
+router.patch('/', (req: Request, res: Response) => {
   try {
-    const tenant = await prisma.tenant.update({
-      where: { id: tenantId },
-      data: { name },
-      select: { id: true, name: true },
-    });
+    const { name } = req.body;
+    const tenant = db.update(tenants)
+      .set({ name, updatedAt: new Date() })
+      .where(eq(tenants.id, req.user!.tenantId))
+      .returning({ id: tenants.id, name: tenants.name })
+      .get();
     res.json(tenant);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Erreur lors de la mise à jour des paramètres' });
   }
 });

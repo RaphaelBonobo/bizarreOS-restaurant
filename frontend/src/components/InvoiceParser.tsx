@@ -5,7 +5,7 @@ import {
 } from "antd";
 import {
   UploadOutlined, FilePdfOutlined, CheckCircleOutlined,
-  EditOutlined, PlusOutlined, DeleteOutlined
+  EditOutlined, PlusOutlined, DeleteOutlined, CloseCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router";
 import { axiosInstance } from "../lib/axios";
@@ -54,6 +54,8 @@ export const InvoiceParser = ({ open, onClose, fournisseurs }: Props) => {
   const [numeroPiece, setNumeroPiece] = useState<string>("");
   const [dateAchat, setDateAchat] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [attachmentId, setAttachmentId] = useState<string | undefined>(undefined);
+  const [s3Saved, setS3Saved] = useState<boolean | null>(null);
 
   const reset = () => {
     setStep("upload");
@@ -64,6 +66,8 @@ export const InvoiceParser = ({ open, onClose, fournisseurs }: Props) => {
     setNumeroPiece("");
     setDateAchat("");
     setError(null);
+    setAttachmentId(undefined);
+    setS3Saved(null);
   };
 
   const handleClose = () => {
@@ -82,8 +86,10 @@ export const InvoiceParser = ({ open, onClose, fournisseurs }: Props) => {
         formData,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
-      const data = resp.data;
+      const data = resp.data as ParsedInvoice & { attachmentId?: string };
       setPreview(data);
+      setAttachmentId(data.attachmentId);
+      setS3Saved(!!data.attachmentId);
       setIngredients(data.ingredients ?? []);
       setNumeroPiece(data.numeroPiece ?? "");
       setDateAchat(data.dateAchat ?? "");
@@ -129,11 +135,12 @@ export const InvoiceParser = ({ open, onClose, fournisseurs }: Props) => {
         fournisseurNom: preview?.fournisseurNom,
         notes: preview?.notes,
         fournisseurIds: selectedFournisseurIds,
+        attachmentId,
         ingredients,
       });
       message.success("Réception créée avec succès !");
       handleClose();
-      navigate(`/receptions/show/${resp.data.id}`);
+      navigate(`/receptions/${resp.data.id}`);
     } catch (e: any) {
       setError(e.response?.data?.error ?? e.message ?? "Erreur lors de la création");
       setStep("preview");
@@ -286,6 +293,15 @@ export const InvoiceParser = ({ open, onClose, fournisseurs }: Props) => {
                 <Tag color="orange" icon={<EditOutlined />}>
                   Détecté : {preview.fournisseurNom}
                 </Tag>
+              )}
+            </div>
+
+            <div>
+              {s3Saved === true && (
+                <Tag icon={<CheckCircleOutlined />} color="success">Facture sauvegardée sur S3</Tag>
+              )}
+              {s3Saved === false && (
+                <Tag icon={<CloseCircleOutlined />} color="default">Facture non sauvegardée (S3 non configuré)</Tag>
               )}
             </div>
 

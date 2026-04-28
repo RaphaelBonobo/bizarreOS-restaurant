@@ -1,52 +1,76 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../lib/prisma.js';
+import { db } from '../lib/db.js';
+import { fournisseurs, receptionFactures, receptionFournisseurs } from '../db/schema.js';
+import { asc, desc, eq } from 'drizzle-orm';
 
 const router = Router();
 
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', (_req: Request, res: Response) => {
   try {
-    const fournisseurs = await prisma.fournisseur.findMany({
-      include: { _count: { select: { receptions: true } } },
-      orderBy: { nom: 'asc' },
+    const rows = db.query.fournisseurs.findMany({
+      with: { receptionFournisseurs: { columns: { receptionId: true } } },
+      orderBy: asc(fournisseurs.nom),
     });
-    res.setHeader('x-total-count', fournisseurs.length);
-    res.json(fournisseurs);
-  } catch (error) {
+    const result = rows.map(({ receptionFournisseurs: rf, ...f }) => ({
+      ...f,
+      _count: { receptions: rf.length },
+    }));
+    res.setHeader('x-total-count', result.length);
+    res.json(result);
+  } catch {
     res.status(500).json({ error: 'Erreur lors de la récupération des fournisseurs' });
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', (req: Request, res: Response) => {
   try {
-    const f = await prisma.fournisseur.findUnique({
-      where: { id: req.params.id },
-      include: { receptions: { orderBy: { dateAchat: 'desc' }, take: 10 } },
-    });
+    const f = db.query.fournisseurs.findFirst({ where: eq(fournisseurs.id, req.params.id) });
     if (!f) return res.status(404).json({ error: 'Fournisseur non trouvé' });
-    res.json(f);
-  } catch (error) {
+
+    const receptions = db.select({
+      id:          receptionFactures.id,
+      numeroPiece: receptionFactures.numeroPiece,
+      dateAchat:   receptionFactures.dateAchat,
+      notes:       receptionFactures.notes,
+      tenantId:    receptionFactures.tenantId,
+      createdAt:   receptionFactures.createdAt,
+      updatedAt:   receptionFactures.updatedAt,
+    })
+      .from(receptionFactures)
+      .innerJoin(receptionFournisseurs, eq(receptionFournisseurs.receptionId, receptionFactures.id))
+      .where(eq(receptionFournisseurs.fournisseurId, req.params.id))
+      .orderBy(desc(receptionFactures.dateAchat))
+      .limit(10)
+      .all();
+
+    res.json({ ...f, receptions });
+  } catch {
     res.status(500).json({ error: 'Erreur lors de la récupération du fournisseur' });
   }
 });
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', (req: Request, res: Response) => {
   try {
     const tenantId = req.user!.tenantId;
-    const f = await prisma.fournisseur.create({ data: { ...req.body, tenantId } });
+    const f = db.insert(fournisseurs).values({ ...req.body, tenantId }).returning().get();
     res.status(201).json(f);
-  } catch (error) {
-    console.error(error);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Erreur lors de la création du fournisseur' });
   }
 });
 
-const updateFournisseur = async (req: Request, res: Response) => {
+const updateFournisseur = (req: Request, res: Response) => {
   try {
     const CHAMPS = ['nom', 'nomContact', 'adresse', 'email', 'telephone', 'type', 'evaluation', 'notes', 'bio', 'certificateur', 'numeroCertificat'];
     const data = Object.fromEntries(Object.entries(req.body).filter(([k]) => CHAMPS.includes(k)));
-    const f = await prisma.fournisseur.update({ where: { id: req.params.id }, data });
+    const f = db.update(fournisseurs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(fournisseurs.id, req.params.id))
+      .returning()
+      .get();
     res.json(f);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Erreur lors de la modification du fournisseur' });
   }
 };
@@ -54,11 +78,11 @@ const updateFournisseur = async (req: Request, res: Response) => {
 router.put('/:id', updateFournisseur);
 router.patch('/:id', updateFournisseur);
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', (req: Request, res: Response) => {
   try {
-    await prisma.fournisseur.delete({ where: { id: req.params.id } });
+    db.delete(fournisseurs).where(eq(fournisseurs.id, req.params.id)).run();
     res.status(204).send();
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Erreur lors de la suppression du fournisseur' });
   }
 });

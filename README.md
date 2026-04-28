@@ -1,6 +1,6 @@
-# Bizarre OS — Restaurant Edition
+# BizarreOS Restaurant
 
-Application de bureau open-source pour la gestion opérationnelle d'un restaurant : menus, ingrédients, fournisseurs, réceptions, traçabilité et suivi HACCP.
+Application de bureau open-source pour la gestion opérationnelle d'un restaurant : menus, ingrédients, fournisseurs, réceptions, traçabilité HACCP et analyse IA de factures PDF.
 
 Produit par [Atelier Bizarre](https://atelierbizarre.fr).
 
@@ -12,23 +12,26 @@ Produit par [Atelier Bizarre](https://atelierbizarre.fr).
 2. [Stack technique](#stack-technique)
 3. [Architecture](#architecture)
 4. [Installation développement](#installation-développement)
-5. [Build & packaging](#build--packaging)
-6. [Fonctionnalités](#fonctionnalités)
-7. [Forker & adapter](#forker--adapter)
-8. [Roadmap](#roadmap)
-9. [Licence](#licence)
+5. [Configuration](#configuration)
+6. [Build & packaging](#build--packaging)
+7. [Fonctionnalités](#fonctionnalités)
+8. [Forker & adapter](#forker--adapter)
+9. [Roadmap](#roadmap)
+10. [Licence](#licence)
 
 ---
 
 ## Présentation
 
-Bizarre OS Restaurant Edition est une application Electron autonome : elle s'installe en un double-clic, sans serveur, sans Docker, sans PostgreSQL. La base de données est un fichier SQLite stocké dans le dossier utilisateur (`~/.config/bizarre-restaurant/restaurant.db` sur Linux, `%APPDATA%\bizarre-restaurant` sur Windows).
+BizarreOS Restaurant est une application Electron autonome : elle s'installe en un double-clic, sans serveur, sans Docker, sans PostgreSQL. La base de données est un fichier SQLite stocké dans le dossier utilisateur (`~/.config/bizarre-restaurant/restaurant.db` sur Linux, `%APPDATA%\bizarre-restaurant` sur Windows).
 
-L'application est conçue pour un usage mono-utilisateur (un seul poste de travail). Elle couvre :
+Conçue pour un usage mono-poste, elle couvre :
 
-- La planification et le suivi des menus (coût matière, allergènes, couvertures, chiffre d'affaires)
-- La gestion des ingrédients et des fournisseurs
-- La réception des marchandises avec traçabilité lot par lot
+- La planification des menus (coût matière, allergènes, couverts, bilan CA)
+- La gestion des ingrédients et fournisseurs
+- Les réceptions de marchandises avec traçabilité lot par lot
+- L'**import automatique de factures PDF** via Claude AI (Anthropic)
+- Le stockage optionnel des factures sur S3 compatible (Infomaniak ou autre)
 - Le suivi HACCP : relevés de températures et registre de nettoyage
 - L'export CSV de toutes les données HACCP
 
@@ -37,72 +40,73 @@ L'application est conçue pour un usage mono-utilisateur (un seul poste de trava
 ## Stack technique
 
 | Couche | Technologie | Version |
-|--------|-------------|---------|
+| ------ | ----------- | ------- |
 | Shell desktop | **Electron** | 41 |
-| Backend embarqué | **Express** + **TypeScript** | 5 / 5 |
-| ORM | **Prisma** | 5 |
-| Base de données | **SQLite** (via Prisma) | — |
+| Backend embarqué | **Express** + **TypeScript** | 4 / 5 |
+| ORM | **Drizzle ORM** | 0.45 |
+| Base de données | **SQLite** (via better-sqlite3) | — |
 | Frontend | **React** + **Vite** | 18 / 6 |
 | UI | **Ant Design** + **Refine** | 5 / 5 |
 | Graphiques | **Recharts** | 2 |
-| Typographie | **Kumbh Sans** (Google Fonts) | — |
 | Packaging | **electron-builder** | 26 |
-
-### Pourquoi SQLite ?
-
-SQLite supprime toute dépendance externe : pas de serveur de base de données à installer, pas de migration à gérer manuellement au premier lancement. Prisma gère le schéma via `prisma db push` au démarrage du backend.
-
-### Pourquoi Electron embarqué ?
-
-Le backend Express est bundlé avec esbuild (`--format=cjs`) et chargé en in-process via `require()` dans le processus principal Electron. Cela évite de spawner un processus fils et simplifie le packaging : un seul binaire, pas de port réseau exposé à l'extérieur.
+| IA | **Claude API** (Anthropic) | — |
+| Stockage | **AWS SDK v3** (S3 compatible) | — |
 
 ---
 
 ## Architecture
 
-```
-atelier-bizarre-restaurant/
-├── backend/                  # API Express/Prisma
-│   ├── prisma/
-│   │   ├── schema.prisma     # Schéma SQLite
-│   │   └── seed.ts           # Seed tenant desktop
+```text
+bizarre-os-restaurant/
+├── backend/                  # API Express + Drizzle ORM
 │   ├── src/
-│   │   ├── index.ts          # Point d'entrée Express
-│   │   ├── lib/prisma.ts     # Client Prisma singleton
+│   │   ├── index.ts          # Point d'entrée Express (port 3000)
+│   │   ├── db/               # Schéma Drizzle + migrations
+│   │   ├── lib/
+│   │   │   ├── db.ts         # Client Drizzle + Proxy sync
+│   │   │   ├── storage.ts    # Abstraction S3 (upload, signed URL)
+│   │   │   └── invoice-parser.ts  # Analyse PDF via Claude AI
 │   │   └── routes/           # Une route par ressource
 │   └── dist/index.cjs        # Bundle esbuild (généré)
 │
 ├── frontend/                 # SPA React/Refine
 │   ├── src/
 │   │   ├── pages/            # Une page par ressource
-│   │   ├── components/       # Logo, Header…
+│   │   ├── components/       # InvoiceParser, Logo, Header…
 │   │   ├── styles/           # tokens.css, custom.css
-│   │   └── providers/        # dataProvider, authProvider
+│   │   └── providers/        # dataProvider, i18nProvider
 │   └── dist/                 # Build Vite (généré)
 │
 ├── desktop/                  # Electron wrapper
 │   ├── src/main.js           # Processus principal
 │   ├── assets/icon.png       # Icône application
+│   ├── scripts/
+│   │   └── post-win-build.js # Post-traitement build Windows
 │   └── package.json          # Config electron-builder
 │
-└── scripts/                  # Scripts de build (zip Windows…)
+├── icones/                   # Sources SVG/PNG du logo
+└── scripts/
+    ├── build.sh              # Build complet (Linux + Windows)
+    └── gen-icon.py           # Génère assets/icon.png
 ```
 
 ### Flux de données
 
-```
+```text
 Electron main.js
-  ├── require(backend/dist/index.cjs)   → Express écoute sur :3000
-  └── express static(frontend/dist)     → Vite SPA sur :5174
+  ├── require(backend/dist/index.cjs)   → Express sur :3000 (in-process)
+  └── loadURL(frontend/dist/index.html) → SPA servie par Express static
 
-BrowserWindow → http://localhost:5174
-  └── fetch/axios → http://localhost:3000/api/*
-        └── Prisma → SQLite (~/.config/.../restaurant.db)
+BrowserWindow → http://localhost:<port>
+  └── axios → http://localhost:<port>/api/*
+        └── Drizzle → SQLite (~/.config/bizarre-restaurant/restaurant.db)
 ```
 
-### Multi-tenant minimal
+Le backend Express est chargé **en-process** via `require()` (pas de processus fils), ce qui simplifie le packaging et évite tout problème de gestion de processus enfants.
 
-Le backend implémente un système de tenant pour préparer une éventuelle version SaaS. En mode desktop, un seul tenant `desktop` est créé automatiquement au premier démarrage (`seedDesktopTenant()`). L'authentification est un JWT statique généré à partir d'un secret fixe — suffisant pour un usage local.
+### Base de données
+
+Au premier lancement, le processus principal copie `resources/template.db` (base vide avec schéma appliqué) dans `app.getPath('userData')`. Chaque mise à jour de l'application réutilise la base existante.
 
 ---
 
@@ -110,84 +114,120 @@ Le backend implémente un système de tenant pour préparer une éventuelle vers
 
 ### Prérequis
 
-- Node.js ≥ 18
+- Node.js ≥ 20
 - npm ≥ 9
+- Python 3 (génération d'icône, optionnel)
 
 ### Démarrage
 
 ```bash
 # 1. Backend
 cd backend
-cp .env.example .env          # DATABASE_URL="file:./dev.db"
+cp .env.example .env      # Remplir ANTHROPIC_API_KEY (obligatoire pour l'IA)
 npm install
-npx prisma db push            # Crée dev.db et applique le schéma
-npm run dev                   # Lance tsx watch sur :3000
+npm run dev               # Express sur :3000
 
 # 2. Frontend (autre terminal)
 cd frontend
 npm install
-npm run dev                   # Vite sur :5173
+npm run dev               # Vite sur :5173
 
 # 3. Electron (autre terminal)
 cd desktop
 npm install
-npm run dev                   # Lance Electron en mode dev (pointe sur :5173/:3000)
+npm run dev               # Pointe sur :5173 (frontend) et :3000 (backend)
 ```
 
-> En mode dev, le backend tourne en processus séparé (`tsx watch`). En production, il est bundlé et chargé in-process.
+En mode dev, le backend tourne en processus séparé (`tsx watch`). En production, il est bundlé et chargé in-process.
+
+---
+
+## Configuration
+
+Toute la configuration sensible est gérée via l'interface **Paramètres** de l'application. Les valeurs sont stockées dans la base SQLite (table `app_settings`).
+
+| Paramètre | Description | Obligatoire |
+| --------- | ----------- | ----------- |
+| `ANTHROPIC_API_KEY` | Clé API Claude pour l'analyse de factures PDF | Pour l'import IA |
+| `S3_ENDPOINT` | URL de votre bucket S3 compatible (ex: `https://s3.pub1.infomaniak.cloud`) | Pour les pièces jointes |
+| `S3_ACCESS_KEY_ID` | Clé d'accès EC2 S3 | Pour les pièces jointes |
+| `S3_SECRET_ACCESS_KEY` | Clé secrète EC2 S3 | Pour les pièces jointes |
+| `S3_BUCKET_NAME` | Nom du bucket (tout en minuscules) | Pour les pièces jointes |
+
+> **Note Infomaniak S3** : la région doit toujours être `us-east-1` quelle que soit la localisation physique du datacenter. Les noms de bucket doivent être en minuscules. Générer les clés EC2 via le tableau de bord Infomaniak (pas les identifiants OpenStack).
+
+Le stockage S3 est **optionnel** : si aucune clé n'est configurée, l'analyse de factures fonctionne normalement, les pièces jointes ne sont simplement pas conservées.
 
 ---
 
 ## Build & packaging
 
+### Linux — AppImage
+
 ```bash
-# Bundle le backend
-cd backend && npm run build
-
-# Bundle le frontend
-cd frontend && npm run build
-
-# Packager AppImage Linux
-cd desktop && npm run package:linux
-
-# Packager ZIP Windows (cross-compile depuis Linux avec Wine ou en natif)
-cd desktop && npm run package:windows
+cd desktop
+npm run dist        # = build frontend + backend + package AppImage
 ```
 
-Les artefacts sont dans `desktop/dist/`.
+L'AppImage est dans `desktop/dist/`.
 
-### Template DB
+### Windows — ZIP portable (depuis Linux)
 
-Au premier build, Prisma génère `backend/template.db` (base vide avec le schéma appliqué). electron-builder la copie dans le package comme `extraResource`. Au premier lancement sur la machine de l'utilisateur, le processus principal la copie dans `app.getPath('userData')` pour créer `restaurant.db`.
+```bash
+cd desktop
+npm run package:windows
+```
+
+Ce script :
+
+1. Build le frontend et le backend
+2. Lance `electron-builder --win --config.win.target=dir` (pas de Wine requis)
+3. Télécharge le binaire Windows précompilé de `better-sqlite3` depuis GitHub
+4. Remplace le `.node` Linux par le `.node` Windows dans `win-unpacked/`
+5. Crée `dist/bizarre-restaurant-windows-x64.zip`
+
+Transférer le zip sur Windows, l'extraire, lancer `bizarre-restaurant.exe`.
+
+### Build complet (Linux + Windows)
+
+```bash
+bash scripts/build.sh
+```
 
 ---
 
 ## Fonctionnalités
 
+### Import de factures PDF (Claude AI)
+
+Le bouton **Importer une facture** sur la page Réceptions ouvre un assistant en deux étapes :
+
+1. **Analyse** : le PDF est transmis à Claude (API Anthropic) qui extrait le numéro de pièce, la date, le fournisseur, et tous les ingrédients avec quantités, unités et prix.
+2. **Révision** : les données extraites sont éditables avant confirmation. Le fournisseur est auto-créé s'il n'existe pas encore.
+3. **Confirmation** : la réception est créée et la facture sauvegardée sur S3 (si configuré).
+
 ### Menus
 
-- Création de menus avec date, type de repas, nombre de couverts prévisionnels/réels, bénévoles
-- Ajout d'ingrédients par cours (entrée, plat, dessert, autre) avec quantités et prix unitaires
-- Calcul automatique du coût total, coût par assiette, panier moyen, bilan
-- Agrégation automatique des allergènes
-- Traçabilité : lien cliquable vers la réception d'origine de chaque ingrédient
+- Création de menus avec date, type de repas, couverts prévisionnels/réels
+- Ingrédients par cours (entrée, plat, dessert, autre) avec prix unitaires
+- Coût total, coût par assiette, panier moyen, bilan calculés automatiquement
+- Allergènes agrégés automatiquement
+- Traçabilité : lien vers la réception d'origine de chaque ingrédient
 
 ### Ingrédients & fournisseurs
 
-- Catalogue d'ingrédients avec catégorie, unité, allergènes (stockés en JSON)
-- Gestion des fournisseurs avec coordonnées et historique
-- Réceptions de marchandises : numéro de pièce, date d'achat, prix, stock
+- Catalogue avec catégorie, unité, allergènes
+- Gestion des fournisseurs avec coordonnées
+- Réceptions avec numéro de pièce, date, prix, stock
 
 ### HACCP
 
-- **Températures** : relevés par équipement (saisie libre ou suggestion depuis l'historique), plage min/max configurable, conformité automatique, graphique d'évolution, export CSV
-- **Nettoyages** : types personnalisables (stockés en localStorage), zones libres, statut conforme/non-conforme basculable, export CSV
-- Suppression des relevés avec confirmation
+- **Températures** : relevés par équipement, plage min/max configurable, conformité automatique, graphique d'évolution, export CSV
+- **Nettoyages** : types personnalisables, zones libres, statut conforme/non-conforme, export CSV
 
-### Paramètres
+### Pièces jointes
 
-- Nom du restaurant (affiché dans le header de l'application)
-- Clé API Anthropic (pour les fonctions d'analyse IA)
+Les factures sauvegardées sur S3 sont accessibles depuis la fiche réception avec un bouton de téléchargement (URL signée, valable 1 heure).
 
 ---
 
@@ -195,35 +235,42 @@ Au premier build, Prisma génère `backend/template.db` (base vide avec le sché
 
 ### Changer la couleur de marque
 
-Les tokens sont dans `frontend/src/styles/tokens.css`. Modifier `--bz-pigment` pour la couleur principale et `--bz-accent` pour les actions.
+Les tokens sont dans `frontend/src/styles/tokens.css`. Modifier `--bz-pigment` pour la couleur principale.
 
 ### Ajouter une ressource
 
-1. Ajouter le modèle dans `backend/prisma/schema.prisma` et lancer `npx prisma db push`
-2. Créer `backend/src/routes/maressource.routes.ts` (CRUD standard)
-3. Monter la route dans `backend/src/index.ts`
-4. Créer les pages dans `frontend/src/pages/maressource/`
-5. Ajouter la ressource dans `frontend/src/App.tsx`
-
-### Passer à PostgreSQL
-
-Changer `provider = "sqlite"` en `provider = "postgresql"` dans `schema.prisma`, mettre à jour `DATABASE_URL` dans `.env`, relancer `prisma db push`. Les enums Prisma redeviennent disponibles.
+1. Ajouter la table dans `backend/src/db/schema.ts`
+2. Générer la migration : `cd backend && npx drizzle-kit generate`
+3. Appliquer : `npx drizzle-kit push`
+4. Créer `backend/src/routes/maressource.routes.ts`
+5. Monter dans `backend/src/index.ts`
+6. Créer les pages dans `frontend/src/pages/maressource/`
+7. Ajouter la ressource dans `frontend/src/App.tsx`
+8. Ajouter les traductions dans `frontend/src/providers/i18nProvider.ts`
 
 ### Exposer l'API sur le réseau local
 
-Dans `backend/src/index.ts`, remplacer `app.listen(PORT, '127.0.0.1', ...)` par `app.listen(PORT, '0.0.0.0', ...)`. Attention : l'authentification actuelle est conçue pour un usage local uniquement.
+Dans `backend/src/index.ts`, remplacer `'127.0.0.1'` par `'0.0.0.0'`. L'authentification actuelle est un JWT statique conçu pour un usage local uniquement.
 
 ---
 
 ## Roadmap
 
-Voir la page **Roadmap** dans l'application (menu latéral) pour le suivi des développements en cours.
+### Application Android (compagnon mobile)
 
-Grandes orientations futures :
+Application React Native (Expo) compagnon pour saisir les relevés de température et les nettoyages depuis une tablette en cuisine.
 
-- **Synchronisation en ligne** : solution souveraine et gratuite (PocketBase auto-hébergé, ou Litestream pour la réplication SQLite)
-- **Application Android** avec base de données partagée
-- **Gestion multi-utilisateurs** avec droits (nécessaire pour la version mobile)
+- Synchronisation via PocketBase (auto-hébergé, gratuit) ou Turso (libSQL dans le cloud)
+- Authentification multi-utilisateurs
+- Mode hors-ligne avec synchronisation différée
+
+### Synchronisation en ligne
+
+Mécanisme léger pour synchroniser la base SQLite locale vers un serveur :
+
+- **Litestream** : réplication continue SQLite → S3 (solution souveraine, zéro infrastructure)
+- **Turso** : base libSQL distante, compatible SQLite, SDK officiel — idéal si on veut accès web
+- Pas de transformation du schéma requise dans les deux cas
 
 ---
 

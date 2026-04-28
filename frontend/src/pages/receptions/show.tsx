@@ -1,14 +1,29 @@
 import { Show } from "@refinedev/antd";
 import { useShow, useNavigation } from "@refinedev/core";
-import { Card, Descriptions, Table, Tag, Button, Space, Tooltip } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { Card, Descriptions, Table, Tag, Button, Space, Tooltip, message } from "antd";
+import { PlusOutlined, FilePdfOutlined, DownloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { axiosInstance } from "../../lib/axios";
+import { API_URL } from "../../config";
 
 export const ReceptionShow = () => {
   const { query } = useShow({ resource: "receptions" });
   const { create, show } = useNavigation();
   const record = query?.data?.data as any;
   if (!record) return null;
+
+  const handleDownload = async (attachmentId: string, filename: string) => {
+    try {
+      const resp = await axiosInstance.get(`${API_URL}/invoice-parser/attachment/${attachmentId}/signed-url`);
+      const a = document.createElement("a");
+      a.href = resp.data.url;
+      a.target = "_blank";
+      a.download = filename;
+      a.click();
+    } catch {
+      message.error("Impossible de télécharger le fichier");
+    }
+  };
 
   const ingColumns = [
     { title: "Ingrédient", dataIndex: "nom", key: "nom", render: (v: string) => v || "—" },
@@ -56,6 +71,25 @@ export const ReceptionShow = () => {
           {record.notes && <Descriptions.Item label="Notes" span={2}>{record.notes}</Descriptions.Item>}
         </Descriptions>
       </Card>
+
+      {(record.attachments ?? []).length > 0 && (
+        <Card title="Pièces jointes" size="small" style={{ marginBottom: 16 }}>
+          <Space wrap>
+            {(record.attachments as any[]).map((att: any) => (
+              <Button
+                key={att.id}
+                icon={<FilePdfOutlined />}
+                onClick={() => handleDownload(att.id, att.filename)}
+              >
+                <span style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block", verticalAlign: "middle" }}>
+                  {att.filename}
+                </span>
+                <DownloadOutlined style={{ marginLeft: 4 }} />
+              </Button>
+            ))}
+          </Space>
+        </Card>
+      )}
 
       <Card title="Ingrédients reçus" size="small">
         <Table dataSource={record.ingredients ?? []} columns={ingColumns} rowKey="id" size="small" pagination={false}

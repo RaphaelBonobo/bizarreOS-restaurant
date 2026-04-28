@@ -2,5 +2,12 @@ node_modules/
 dist/
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 .env
+.env.local
+.env.production
+.env.staging
 .DS_Store
+.claude/
+*.log

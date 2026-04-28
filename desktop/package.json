@@ -1,5 +1,5 @@
 {
-  "name": "atelier-bizarre-restaurant-desktop",
+  "name": "bizarre-os-restaurant-desktop",
   "version": "1.0.0",
   "description": "Bizarre OS — Restaurant Edition",
   "main": "src/main.js",
@@ -9,11 +9,16 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "build:frontend": "cd ../frontend && VITE_API_URL=http://localhost:3000/api npm run build",
+    "build:backend": "cd ../backend && npm run build",
+    "build": "npm run build:frontend && npm run build:backend",
     "package:linux": "electron-builder build --linux",
-    "package:windows": "electron-builder build --win || true"
+    "package:appimage": "cd ../backend && npm run rebuild:electron && cd ../desktop && electron-builder build --linux AppImage",
+    "package:deb": "electron-builder build --linux deb",
+    "package:windows": "electron-builder build --win --config.win.target=dir && node scripts/post-win-build.js",
+    "dist": "npm run build && npm run package:appimage"
   },
   "dependencies": {
-    "electron-store": "^8.1.0",
     "express": "^4.19.2"
   },
   "devDependencies": {
@@ -21,25 +26,58 @@
     "electron-builder": "^26.8.1"
   },
   "build": {
-    "appId": "com.atelierbizarre.restaurant",
-    "productName": "Bizarre OS",
+    "appId": "com.bizarreos.restaurant",
+    "productName": "Bizarre OS Restaurant",
     "executableName": "bizarre-restaurant",
     "linux": {
       "target": ["AppImage"],
       "category": "Office",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "maintainer": "Atelier Bizarre <contact@atelierbizarre.fr>",
+      "synopsis": "Gestion de restaurant — Bizarre OS"
     },
     "win": {
-      "target": [{"target": "dir", "arch": ["x64"]}]
+      "target": [{"target": "dir", "arch": ["x64"]}],
+      "icon": "assets/icon.png"
     },
     "files": ["src/**/*", "assets/**/*", "!**/*.map"],
     "extraResources": [
-      {"from": "../frontend/dist", "to": "frontend", "filter": ["**/*"]},
-      {"from": "../backend/dist/index.cjs", "to": "backend/dist/index.cjs"},
-      {"from": "../backend/node_modules/.prisma", "to": "backend/node_modules/.prisma", "filter": ["**/*"]},
-      {"from": "../backend/node_modules/@prisma/client", "to": "backend/node_modules/@prisma/client", "filter": ["**/*"]},
-      {"from": "../backend/template.db", "to": "template.db"}
+      {
+        "from": "../frontend/dist",
+        "to": "frontend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/dist/index.cjs",
+        "to": "backend/dist/index.cjs"
+      },
+      {
+        "from": "../backend/node_modules/better-sqlite3",
+        "to": "backend/node_modules/better-sqlite3",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/node_modules/bindings",
+        "to": "backend/node_modules/bindings",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/node_modules/file-uri-to-path",
+        "to": "backend/node_modules/file-uri-to-path",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../backend/package.json",
+        "to": "backend/package.json"
+      },
+      {
+        "from": "../backend/template.db",
+        "to": "template.db"
+      }
     ],
-    "directories": {"output": "dist", "buildResources": "assets"}
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    }
   }
 }

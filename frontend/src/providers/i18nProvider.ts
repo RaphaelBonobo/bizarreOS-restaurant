@@ -68,6 +68,54 @@ const fr: Record<string, string> = {
 
   // Champs vides
   "fields.noValue": "—",
+
+  // Notification générique succès (utilisé par Refine pour les opérations custom)
+  "notifications.success": "Succès",
+
+  // Titres de pages (ant-page-header-heading-title, générés par Refine)
+  "receptions.titles.show":   "Réception",
+  "receptions.titles.create": "Nouvelle réception",
+  "receptions.titles.list":   "Réceptions",
+  "ingredients.titles.show":   "Ingrédient",
+  "ingredients.titles.create": "Nouvel ingrédient",
+  "ingredients.titles.edit":   "Modifier l'ingrédient",
+  "ingredients.titles.list":   "Ingrédients",
+  "fournisseurs.titles.show":   "Fournisseur",
+  "fournisseurs.titles.create": "Nouveau fournisseur",
+  "fournisseurs.titles.edit":   "Modifier le fournisseur",
+  "fournisseurs.titles.list":   "Fournisseurs",
+  "menus.titles.show":   "Menu",
+  "menus.titles.create": "Nouveau menu",
+  "menus.titles.edit":   "Modifier le menu",
+  "menus.titles.list":   "Menus",
+  "nettoyages.titles.list":   "Nettoyages",
+  "temperatures.titles.list": "Températures",
+  "configurations.titles.list": "Configurations",
+  "dashboard.titles.list": "Tableau de bord",
+  "settings.titles.list":  "Paramètres",
+
+  // Titres d'onglet (documentTitle)
+  "documentTitle.suffix": "Bizarre OS Restaurant",
+  "documentTitle.default": "Bizarre OS Restaurant",
+  "documentTitle.ingredients.list":   "Ingrédients | Bizarre OS",
+  "documentTitle.ingredients.create": "Nouvel ingrédient | Bizarre OS",
+  "documentTitle.ingredients.show":   "Ingrédient | Bizarre OS",
+  "documentTitle.ingredients.edit":   "Modifier ingrédient | Bizarre OS",
+  "documentTitle.fournisseurs.list":   "Fournisseurs | Bizarre OS",
+  "documentTitle.fournisseurs.create": "Nouveau fournisseur | Bizarre OS",
+  "documentTitle.fournisseurs.show":   "Fournisseur | Bizarre OS",
+  "documentTitle.fournisseurs.edit":   "Modifier fournisseur | Bizarre OS",
+  "documentTitle.receptions.list":   "Réceptions | Bizarre OS",
+  "documentTitle.receptions.create": "Nouvelle réception | Bizarre OS",
+  "documentTitle.receptions.show":   "Réception | Bizarre OS",
+  "documentTitle.menus.list":   "Menus | Bizarre OS",
+  "documentTitle.menus.create": "Nouveau menu | Bizarre OS",
+  "documentTitle.menus.show":   "Menu | Bizarre OS",
+  "documentTitle.menus.edit":   "Modifier menu | Bizarre OS",
+  "documentTitle.nettoyages.list":    "Nettoyages | Bizarre OS",
+  "documentTitle.temperatures.list":  "Températures | Bizarre OS",
+  "documentTitle.settings.list":      "Paramètres | Bizarre OS",
+  "documentTitle.dashboard.list":     "Tableau de bord | Bizarre OS",
 };
 
 function interpolate(template: string, params?: Record<string, unknown>): string {

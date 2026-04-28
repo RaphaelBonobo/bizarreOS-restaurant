@@ -1,12 +1,14 @@
 {
-  "name": "atelier-bizarre-restaurant",
+  "name": "bizarre-os-restaurant",
   "version": "1.0.0",
   "private": true,
+  "description": "BizarreOS Restaurant — application de gestion HACCP pour restaurant",
   "scripts": {
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:desktop": "cd desktop && npm run dev",
     "build": "cd desktop && npm run build",
-    "package:linux": "cd desktop && npm run package:linux"
+    "dist:linux": "cd desktop && npm run dist",
+    "dist:windows": "cd desktop && npm run package:windows"
   }
 }

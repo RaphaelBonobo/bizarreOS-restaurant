@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../lib/prisma.js';
+import { db } from '../lib/db.js';
+import { menus } from '../db/schema.js';
+import { and, asc, eq, gte, lte } from 'drizzle-orm';
 
 const router = Router();
 
@@ -22,20 +24,23 @@ function calculerCout(ingredients: any[]): number {
   }, 0);
 }
 
-// GET /exports/menu/:id/json — données brutes pour export côté client
-router.get('/menu/:id/json', async (req: Request, res: Response) => {
+const MENU_WITH = { ingredients: { with: { ingredient: true } } };
+
+router.get('/menu/:id/json', (req: Request, res: Response) => {
   try {
-    const menu = await prisma.menu.findUnique({
-      where: { id: req.params.id },
-      include: { ingredients: { include: { ingredient: true } } },
+    const menu = db.query.menus.findFirst({
+      where: eq(menus.id, req.params.id),
+      with:  MENU_WITH,
     });
     if (!menu) return res.status(404).json({ error: 'Menu non trouvé' });
 
     const coutTotal = calculerCout(menu.ingredients);
     const couverts = menu.nbCouvertsReels ?? menu.nbCouvertsPrevus;
-    const ca = menu.chiffreAffaires ? Number(menu.chiffreAffaires) : null;
+    const ca = menu.chiffreAffaires ?? null;
     const coutParCouvert = couverts > 0 ? coutTotal / couverts : 0;
-    const allergenes = [...new Set(menu.ingredients.flatMap((mi) => { try { return JSON.parse(mi.ingredient?.allergenes || '[]'); } catch { return []; } }))];
+    const allergenes = ([...new Set(menu.ingredients.flatMap((mi) => {
+      try { return JSON.parse(mi.ingredient?.allergenes || '[]') as string[]; } catch { return [] as string[]; }
+    }))] as string[]);
 
     res.json({
       menu: {
@@ -54,49 +59,48 @@ router.get('/menu/:id/json', async (req: Request, res: Response) => {
             ? Number(mi.ingredient.prixTotal) / Number(mi.ingredient.stockReception)
             : 0;
         return {
-          nom: mi.ingredient?.nom ?? '—',
-          quantite: Number(mi.quantite),
-          unite: mi.unite ?? mi.ingredient?.unite ?? '—',
+          nom:          mi.ingredient?.nom ?? '—',
+          quantite:     Number(mi.quantite),
+          unite:        mi.unite ?? mi.ingredient?.unite ?? '—',
           prixUnitaire: Math.round(prixU * 100) / 100,
-          coutLigne: Math.round(prixU * Number(mi.quantite) * 100) / 100,
-          allergenes: ((): string[] => { try { return JSON.parse(mi.ingredient?.allergenes || '[]'); } catch { return []; } })().map((a: string) => ALLERGENE_LABELS[a] ?? a),
+          coutLigne:    Math.round(prixU * Number(mi.quantite) * 100) / 100,
+          allergenes:   ((): string[] => { try { return JSON.parse(mi.ingredient?.allergenes || '[]'); } catch { return []; } })()
+            .map((a: string) => ALLERGENE_LABELS[a] ?? a),
         };
       }),
     });
-  } catch (error) {
-    console.error(error);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Erreur lors de la génération de l\'export' });
   }
 });
 
-// GET /exports/csv?mois=YYYY-MM — export CSV mensuel
-router.get('/csv', async (req: Request, res: Response) => {
+router.get('/csv', (req: Request, res: Response) => {
   try {
     const { mois } = req.query as { mois?: string };
-
-    let where: any = {};
     let filename = 'menus-export.csv';
+    let whereCond = undefined as ReturnType<typeof and> | undefined;
 
     if (mois) {
       const [y, m] = mois.split('-').map(Number);
-      where.date = { gte: new Date(y, m - 1, 1), lte: new Date(y, m, 0, 23, 59, 59) };
+      whereCond = and(gte(menus.date, new Date(y, m - 1, 1)), lte(menus.date, new Date(y, m, 0, 23, 59, 59)));
       filename = `menus-${mois}.csv`;
     }
 
-    const menus = await prisma.menu.findMany({
-      where,
-      include: { ingredients: { include: { ingredient: true } } },
-      orderBy: { date: 'asc' },
+    const rows = db.query.menus.findMany({
+      where:   whereCond,
+      with:    MENU_WITH,
+      orderBy: asc(menus.date),
     });
 
     const lines: string[] = [
       'Date,Nom,Type,Couverts prévus,Couverts réels,Couverts bénévoles,Bénévoles,Heures,Coût total (€),Coût/assiette (€),CA (€),Panier moyen (€),Coût repas bénévoles (€),Bilan (€)',
     ];
 
-    for (const menu of menus) {
+    for (const menu of rows) {
       const cout = calculerCout(menu.ingredients);
       const couverts = menu.nbCouvertsReels ?? menu.nbCouvertsPrevus;
-      const ca = menu.chiffreAffaires ? Number(menu.chiffreAffaires) : null;
+      const ca = menu.chiffreAffaires ?? null;
       const coutParCouvert = couverts > 0 ? cout / couverts : 0;
       const bilan = ca !== null ? ca - cout : null;
       const panisMoyen = ca && menu.nbCouvertsReels ? ca / menu.nbCouvertsReels : null;
@@ -110,7 +114,7 @@ router.get('/csv', async (req: Request, res: Response) => {
         menu.nbCouvertsReels ?? '',
         menu.nbCouvertsBenevoles ?? '',
         menu.nbBenevoles,
-        Number(menu.heuresBenevoles),
+        menu.heuresBenevoles,
         (Math.round(cout * 100) / 100).toFixed(2),
         (Math.round(coutParCouvert * 100) / 100).toFixed(2),
         ca !== null ? ca.toFixed(2) : '',
@@ -122,9 +126,9 @@ router.get('/csv', async (req: Request, res: Response) => {
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send('\uFEFF' + lines.join('\r\n')); // BOM UTF-8 pour Excel
-  } catch (error) {
-    console.error(error);
+    res.send('﻿' + lines.join('\r\n'));
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: 'Erreur lors de la génération du CSV' });
   }
 });

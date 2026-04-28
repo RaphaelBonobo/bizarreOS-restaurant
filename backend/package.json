@@ -4,31 +4,35 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon --exec tsx src/index.ts",
-    "build": "rm -rf dist && npx prisma generate && npx esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --external:@prisma/client",
     "start": "node dist/index.cjs",
-    "prisma:generate": "npx prisma generate",
-    "prisma:migrate": "npx prisma migrate dev",
-    "prisma:migrate:deploy": "npx prisma migrate deploy",
-    "prisma:studio": "npx prisma studio",
-    "seed": "npx tsx prisma/seed.ts"
+    "db:push": "drizzle-kit push",
+    "db:push:template": "rm -f template.db && DATABASE_URL=file:./template.db drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "rebuild:electron": "npx @electron/rebuild -f -v 41.2.1 -m . --only better-sqlite3",
+    "build": "rm -rf dist && npm rebuild better-sqlite3 && npm run db:push:template && npm run rebuild:electron && npx esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --external:better-sqlite3"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
-    "@prisma/client": "^5.12.0",
+    "@aws-sdk/client-s3": "^3.1037.0",
+    "@aws-sdk/s3-request-presigner": "^3.1037.0",
     "@types/multer": "^2.1.0",
+    "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
     "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.45.2",
     "express": "^4.19.2",
     "multer": "^2.1.1",
     "tsx": "^4.21.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/node": "^20.12.12",
+    "drizzle-kit": "^0.31.10",
     "esbuild": "^0.25.0",
     "nodemon": "^3.1.0",
-    "prisma": "^5.12.0",
     "typescript": "^5.4.5"
   }
 }
