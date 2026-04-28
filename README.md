@@ -2,7 +2,7 @@
 
 Application de bureau open-source pour la gestion opérationnelle d'un restaurant : menus, ingrédients, fournisseurs, réceptions, traçabilité HACCP et analyse IA de factures PDF.
 
-Produit par [Atelier Bizarre](https://atelierbizarre.fr).
+Produit par [Atelier Bizarre](https://atelier-bizarre.fr).
 
 ---
 
