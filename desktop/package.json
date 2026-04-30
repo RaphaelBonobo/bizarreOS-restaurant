@@ -38,7 +38,8 @@
     },
     "win": {
       "target": [{"target": "dir", "arch": ["x64"]}],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "asar": false
     },
     "files": ["src/**/*", "assets/**/*", "!**/*.map"],
     "extraResources": [

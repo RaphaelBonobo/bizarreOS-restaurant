@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
 
-const dbPath = process.env.DB_PATH
+export const dbPath = process.env.DB_PATH
   ?? (process.env.DATABASE_URL ?? 'file:./dev.db').replace(/^file:/, '');
 
 const sqlite = new Database(dbPath);

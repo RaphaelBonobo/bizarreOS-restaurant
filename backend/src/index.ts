@@ -15,6 +15,7 @@ import invoiceParserRoutes from './routes/invoice-parser.routes.js';
 import attachmentsRoutes from './routes/attachments.routes.js';
 import appSettingsRoutes from './routes/app-settings.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
+import backupRoutes from './routes/backup.routes.js';
 import { authenticate } from './middleware/auth.js';
 
 const app = express();
@@ -48,6 +49,7 @@ app.use('/api/invoice-parser', authenticate, invoiceParserRoutes);
 app.use('/api/attachments',   authenticate, attachmentsRoutes);
 app.use('/api/app-settings',  authenticate, appSettingsRoutes);
 app.use('/api/settings',       authenticate, settingsRoutes);
+app.use('/api/backup',         authenticate, backupRoutes);
 
 app.get('/health', (_req, res) => {
   try {

@@ -75,6 +75,20 @@ export function extractKeyFromUrl(url: string): string {
   return match ? match[1] : url.split('/').slice(-2).join('/');
 }
 
+export async function uploadBackup(file: Buffer, tenantId: string): Promise<{ key: string }> {
+  const { client, bucket } = getS3Config(tenantId);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const key = `backup/${timestamp}.db`;
+  await client.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: file,
+    ContentType: 'application/x-sqlite3',
+    Metadata: { tenantId },
+  }));
+  return { key };
+}
+
 export async function downloadFile(urlOrKey: string, tenantId: string): Promise<Buffer> {
   const { client, bucket } = getS3Config(tenantId);
   const key = urlOrKey.includes('://') ? extractKeyFromUrl(urlOrKey) : urlOrKey;
