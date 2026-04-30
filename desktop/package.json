@@ -16,6 +16,7 @@
     "package:appimage": "cd ../backend && npm run rebuild:electron && cd ../desktop && electron-builder build --linux AppImage",
     "package:deb": "electron-builder build --linux deb",
     "package:windows": "electron-builder build --win --config.win.target=dir && node scripts/post-win-build.js",
+    "package:windows:nowine": "npm run build && node scripts/build-windows-manual.js",
     "dist": "npm run build && npm run package:appimage"
   },
   "dependencies": {

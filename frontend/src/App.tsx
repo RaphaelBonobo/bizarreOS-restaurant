@@ -1,5 +1,5 @@
 import { Refine } from "@refinedev/core";
-import { useNotificationProvider, ThemedLayout, ThemedSider } from "@refinedev/antd";
+import { useNotificationProvider, ThemedLayout } from "@refinedev/antd";
 import { ConfigProvider, App as AntdApp, theme } from "antd";
 import frFR from "antd/locale/fr_FR";
 import routerBindings, { NavigateToResource, UnsavedChangesNotifier } from "@refinedev/react-router";
@@ -12,7 +12,7 @@ import "./styles/custom.css";
 
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { Header } from "./components/Header";
-import { Logo } from "./components/Logo/Logo";
+import { CustomSider } from "./components/CustomSider";
 import { Dashboard } from "./pages/dashboard";
 import { MenuList, MenuShow, MenuCreate, MenuEdit } from "./pages/menus";
 import { IngredientList, IngredientShow, IngredientCreate, IngredientEdit } from "./pages/ingredients";
@@ -22,19 +22,6 @@ import { NettoyagePage, TemperaturePage } from "./pages/haccp";
 import { SettingsPage } from "./pages/settings";
 import { RoadmapPage } from "./pages/roadmap";
 
-function SiderTitle() {
-  const { mode } = useTheme();
-  return (
-    <div style={{ padding: "8px 10px 12px" }}>
-      <Logo
-        product="menu"
-        size={36}
-        dark={mode === "dark"}
-        tagline="Restaurant Edition"
-      />
-    </div>
-  );
-}
 
 function AppContent() {
   const { mode } = useTheme();
@@ -161,12 +148,7 @@ function AppContent() {
               element={
                 <ThemedLayout
                   Header={() => <Header />}
-                  Sider={(props) => (
-                    <ThemedSider
-                      {...props}
-                      Title={() => <SiderTitle />}
-                    />
-                  )}
+                  Sider={() => <CustomSider />}
                 >
                   <Outlet />
                 </ThemedLayout>

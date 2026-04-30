@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useCustom, useCustomMutation } from "@refinedev/core";
 import {
-  Card, Form, Input, Button,
+  Card, Form, Input, Button, message,
   Tag, Divider, Typography, Space, Flex,
 } from "antd";
 import {
   CheckCircleFilled, CloseCircleFilled,
-  CloudUploadOutlined, CheckOutlined, CloseOutlined,
+  CloudUploadOutlined, CloudDownloadOutlined, CheckOutlined, CloseOutlined,
 } from "@ant-design/icons";
 import { API_URL } from "../../config";
 
@@ -85,6 +85,7 @@ export const SettingsPage = () => {
   const [integrationsForm] = Form.useForm();
   const [appSettings, setAppSettings] = useState<AppSettings>({});
   const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
   const [backupStatus, setBackupStatus] = useState<BackupStatus>(() => {
     try { return JSON.parse(localStorage.getItem(BACKUP_LS_KEY) ?? "null"); }
     catch { return null; }
@@ -145,6 +146,24 @@ export const SettingsPage = () => {
     );
   };
 
+  const onRestore = async () => {
+    setRestoreLoading(true);
+    try {
+      const token = localStorage.getItem("auth_token") ?? "";
+      const res = await fetch(`${API_URL}/backup/restore`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur inconnue");
+      message.success(`Restauration prête (${data.key}). Redémarrez l'application pour appliquer.`, 8);
+    } catch (err: any) {
+      message.error(err.message ?? "Échec de la restauration");
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
   // ── Backup ─────────────────────────────────────────────────────────
   const onBackup = async () => {
     setBackupLoading(true);
@@ -198,9 +217,14 @@ export const SettingsPage = () => {
         <Text type="secondary" style={{ display: "block", marginBottom: 16, fontSize: 13 }}>
           Envoie une copie de la base de données sur votre bucket S3. Nécessite que le stockage S3 soit configuré.
         </Text>
-        <Button icon={<CloudUploadOutlined />} loading={backupLoading} onClick={onBackup}>
-          Sauvegarder maintenant
-        </Button>
+        <Space>
+          <Button icon={<CloudUploadOutlined />} loading={backupLoading} onClick={onBackup}>
+            Sauvegarder maintenant
+          </Button>
+          <Button icon={<CloudDownloadOutlined />} loading={restoreLoading} onClick={onRestore} danger>
+            Restaurer depuis S3
+          </Button>
+        </Space>
         <BackupFeedback status={backupStatus} />
       </Card>
 

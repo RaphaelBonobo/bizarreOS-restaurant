@@ -28,6 +28,19 @@ function getDbPath() {
   const dbDir = path.join(app.getPath('userData'), 'database');
   if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
   const dbPath = path.join(dbDir, 'app.sqlite');
+
+  // Restauration en attente (déclenchée depuis l'UI)
+  const pendingRestore = dbPath + '.pending-restore';
+  if (fs.existsSync(pendingRestore)) {
+    try {
+      fs.copyFileSync(pendingRestore, dbPath);
+      fs.unlinkSync(pendingRestore);
+      console.log('Base de données restaurée depuis S3.');
+    } catch (e) {
+      console.error('Erreur restauration DB:', e);
+    }
+  }
+
   if (!fs.existsSync(dbPath) && !isDev) {
     const templatePath = path.join(resourcesPath, 'template.db');
     if (fs.existsSync(templatePath)) {
@@ -36,6 +49,18 @@ function getDbPath() {
     }
   }
   return dbPath;
+}
+
+function autoBackup() {
+  const req = http.request(
+    { hostname: 'localhost', port: BACKEND_PORT, path: '/api/backup', method: 'POST', timeout: 30000 },
+    (res) => {
+      res.resume();
+      console.log(res.statusCode === 200 ? 'Backup automatique S3 réussi.' : 'Backup automatique ignoré (S3 non configuré ?).');
+    }
+  );
+  req.on('error', () => {});
+  req.end();
 }
 
 function findNodeBinary() {
@@ -225,10 +250,11 @@ app.whenReady().then(async () => {
   try {
     await startFrontendServer();
     await startBackend();
+    if (!isDev) setTimeout(autoBackup, 3000);
     createWindow();
   } catch (error) {
     console.error('Erreur au démarrage:', error);
-    createWindow(); // affiche quand même la fenêtre
+    createWindow();
   }
 });
 

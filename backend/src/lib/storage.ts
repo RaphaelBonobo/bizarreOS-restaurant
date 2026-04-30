@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { db } from './db.js';
@@ -87,6 +87,29 @@ export async function uploadBackup(file: Buffer, tenantId: string): Promise<{ ke
     Metadata: { tenantId },
   }));
   return { key };
+}
+
+export async function uploadSafetyBackup(file: Buffer, tenantId: string): Promise<{ key: string }> {
+  const { client, bucket } = getS3Config(tenantId);
+  const date = new Date().toISOString().slice(0, 10);
+  const key = `safety-backup/${date}.db`;
+  await client.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: file,
+    ContentType: 'application/x-sqlite3',
+    Metadata: { tenantId, type: 'safety' },
+  }));
+  return { key };
+}
+
+export async function listBackups(tenantId: string): Promise<{ key: string; date: Date; size: number }[]> {
+  const { client, bucket } = getS3Config(tenantId);
+  const res = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: 'backup/' }));
+  return (res.Contents ?? [])
+    .filter((o): o is { Key: string; LastModified: Date; Size: number } => !!(o.Key && o.LastModified))
+    .map(o => ({ key: o.Key, date: o.LastModified, size: o.Size ?? 0 }))
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
 export async function downloadFile(urlOrKey: string, tenantId: string): Promise<Buffer> {
